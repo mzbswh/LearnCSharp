@@ -1,0 +1,7 @@
+public partial class TextClass
+{
+    public void TextMethod()
+    {
+        Console.WriteLine("TextMethod");
+    }
+}
