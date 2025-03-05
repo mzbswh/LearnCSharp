@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AdditionalFiles Include="text.txt" />
+    <AdditionalFiles Include="Txts/*.txt" />
   </ItemGroup>
 
   <Target Name="CleanGeneratedFiles" BeforeTargets="BeforeBuild">

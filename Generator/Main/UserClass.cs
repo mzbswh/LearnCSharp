@@ -1,5 +1,17 @@
-public partial class UserClass
+using System.ComponentModel;
+
+namespace GeneratedNamespace
 {
-    [GeneratedNamespace.Generated]
-    public partial void UserMethod();
+    public partial class UserClass
+    {
+        [AutoNotify]
+        private bool _boolProp;
+
+        [AutoNotify(PropertyName = "Count")]
+        private int _intProp;
+
+
+        [GeneratedNamespace.Generated]
+        public partial void UserMethod();
+    }
 }
