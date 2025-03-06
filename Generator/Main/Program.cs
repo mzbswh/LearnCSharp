@@ -9,5 +9,11 @@ Console.WriteLine($"Debugger.Launch() returned {ret} {Debugger.IsAttached}");
 //     System.Threading.Thread.Sleep(500);
 
 Console.WriteLine("Hello, World!");
-new UserClass().UserMethod();
 new TextClass().TextMethod();
+
+var userClass = new UserClass();
+userClass.UserMethod();
+userClass.PropertyChanged += (sender, args) => Console.WriteLine($"Property changed: {args.PropertyName}");
+
+userClass.BoolProp = true;
+userClass.Count = 42;

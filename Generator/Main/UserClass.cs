@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using AutoNotify;
 
 namespace GeneratedNamespace
 {
@@ -9,7 +10,6 @@ namespace GeneratedNamespace
 
         [AutoNotify(PropertyName = "Count")]
         private int _intProp;
-
 
         [GeneratedNamespace.Generated]
         public partial void UserMethod();

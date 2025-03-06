@@ -1,5 +1,6 @@
 ﻿using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,7 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 public class CustomGenerator : IIncrementalGenerator
 {
     private record Model(string Namespace, string ClassName, string MethodName);
-    private record FieldModel(string Namespace, string ClassName, string FieldName, string FieldType);
+    private record FieldModel(string Namespace, string ClassName, string FieldName, string FieldType, string PropertyName);
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -76,19 +77,38 @@ public class CustomGenerator : IIncrementalGenerator
 
         // Generate Property
         var pp1 = context.SyntaxProvider.ForAttributeWithMetadataName(
-            fullyQualifiedMetadataName: "GeneratedNamespace.AutoNotifyAttribute",
-            predicate: static (syntaxNode, cancellationToken) => syntaxNode is FieldDeclarationSyntax,
+            fullyQualifiedMetadataName: "AutoNotify.AutoNotifyAttribute",
+            predicate: static (syntaxNode, cancellationToken) => true,
             transform: static (context, cancellationToken) =>
             {
-                var fieldDeclaration = (FieldDeclarationSyntax)context.TargetNode;
+                var variableDeclarator = (VariableDeclaratorSyntax)context.TargetNode;
+                var fieldName = variableDeclarator.Identifier.Text;
+                var attribute = context.Attributes[0];
+                var pName = attribute.NamedArguments.FirstOrDefault(a => a.Key == "PropertyName").Value.Value?.ToString();
+                if (string.IsNullOrEmpty(pName))
+                {
+                    pName = fieldName;
+                    // 将_varName/varName 转换为 VarName
+                    // 去掉下划线
+                    if (fieldName.StartsWith("_"))
+                    {
+                        pName = pName.Substring(1);
+                    }
+                    // 首字母大写
+                    if (fieldName.Length > 0)
+                    {
+                        pName = char.ToUpper(pName[0]) + pName.Substring(1);
+                    }
+                }
                 var containingClass = context.TargetSymbol.ContainingType;
-                var fieldName = fieldDeclaration.Declaration.Variables[0].Identifier.Text;
+                var declaration = variableDeclarator.Parent as VariableDeclarationSyntax;
+                var fieldType = declaration?.Type.ToString();
                 return new FieldModel(
-                    // Note: this is a simplified example. You will also need to handle the case where the type is in a global namespace, nested, etc.
                     Namespace: containingClass.ContainingNamespace?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted)),
                     ClassName: containingClass.Name,
                     FieldName: fieldName,
-                    FieldType: fieldDeclaration.Declaration.Type.ToString());
+                    FieldType: fieldType,
+                        PropertyName: pName);
             }
         );
 
@@ -100,28 +120,53 @@ public class CustomGenerator : IIncrementalGenerator
         });
 
         context.RegisterSourceOutput(pp2, static (context, groupedFields) =>
-        {
-            foreach (var group in groupedFields)
             {
-                var namespaceName = group.Key.Namespace;
-                var className = group.Key.ClassName;
-                var fields = group.Value;
+                context.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor(
+                    id: "GEN001",
+                    title: "Generator Information",
+                    messageFormat: $"Processing AutoNotify fields {groupedFields.Count}",
+                    category: "Generator",
+                    DiagnosticSeverity.Warning,
+                    isEnabledByDefault: true), Location.None));
 
-                var propertyDef = string.Join("\n", fields.Select(f => $"public bool {f.FieldName} {{ get; set; }}"));
+                foreach (var group in groupedFields)
+                {
+                    var namespaceName = group.Key.Namespace;
+                    var className = group.Key.ClassName;
+                    var fields = group.Value;
 
-                var sourceText = SourceText.From($$"""
+                    var propertyDef = string.Join("\n\n", fields.Select(f => $$"""
+                            // fieldName= {{f.FieldName}}
+                            // fieldType {{f.FieldType}}
+                            // PropertyName= {{f.PropertyName}}
+                            public {{f.FieldType}} {{f.PropertyName}}
+                            {
+                                get => {{f.FieldName}};
+                                set
+                                {
+                                    {{f.FieldName}} = value;
+                                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("{{f.PropertyName}}"));
+                                }
+                            }
+                    """));
+
+                    var sourceText = SourceText.From($$"""
+                    using System.ComponentModel;
+
                     namespace {{namespaceName}}
                     {
-                        public partial class {{className}}
+                        public partial class {{className}} : INotifyPropertyChanged
                         {
-                            {{propertyDef}}
+                            public event PropertyChangedEventHandler PropertyChanged;
+
+                    {{propertyDef}}
                         }
                     }
                     """, Encoding.UTF8);
 
-                context.AddSource($"{className}_AutoNotify.g.cs", sourceText);
-            }
-        });
+                    context.AddSource($"{className}_AutoNotify.g.cs", sourceText);
+                }
+            });
 
 
         // generate text
