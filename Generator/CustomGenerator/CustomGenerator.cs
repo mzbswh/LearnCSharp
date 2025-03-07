@@ -196,7 +196,52 @@ public class CustomGenerator : IIncrementalGenerator
                 }
             });
 
-        // generate code
+        // custom property and metadata
+        var emitLoggingPipeline = context.AnalyzerConfigOptionsProvider.Select(static (options, cancellationToken) =>
+            options.GlobalOptions.TryGetValue("emit_log", out var emitLoggingSwitch)
+                ? emitLoggingSwitch.Equals("true", StringComparison.InvariantCultureIgnoreCase)
+                : false); // Default
 
+        context.RegisterSourceOutput(emitLoggingPipeline, static (context, emitLogging) =>
+        {
+            context.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor(
+                id: "GEN001",
+                title: "Generator Information",
+                messageFormat: $"EmitLogging: {emitLogging}",
+                category: "Generator",
+                DiagnosticSeverity.Warning,
+                isEnabledByDefault: true), Location.None));
+        });
+
+        var property = context.AnalyzerConfigOptionsProvider.Select((provider, ct) =>
+            provider.GlobalOptions.TryGetValue("build_property.TestVisibleProperty", out var emitLoggingSwitch)
+                ? emitLoggingSwitch.Equals("true", StringComparison.InvariantCultureIgnoreCase) : false);
+        context.RegisterSourceOutput(property, static (context, visibleProperty) =>
+        {
+            context.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor(
+                id: "GEN001",
+                title: "Generator Information",
+                messageFormat: $"VisibleProperty: {visibleProperty}",
+                category: "Generator",
+                DiagnosticSeverity.Warning,
+                isEnabledByDefault: true), Location.None));
+        });
+
+        var metadata = context.AdditionalTextsProvider
+            .Combine(context.AnalyzerConfigOptionsProvider)
+            .Select((pair, ctx) =>
+                pair.Right.GetOptions(pair.Left).TryGetValue("build_metadata.AdditionalFiles.TestVisibleItemMetadata", out var perFileLoggingSwitch)
+                ? perFileLoggingSwitch.Equals("true", StringComparison.OrdinalIgnoreCase) : false);
+
+        context.RegisterSourceOutput(metadata, static (context, visibleMetadata) =>
+        {
+            context.ReportDiagnostic(Diagnostic.Create(new DiagnosticDescriptor(
+                id: "GEN001",
+                title: "Generator Information",
+                messageFormat: $"VisibleMetadata: {visibleMetadata}",
+                category: "Generator",
+                DiagnosticSeverity.Warning,
+                isEnabledByDefault: true), Location.None));
+        });
     }
 }
